@@ -23,7 +23,7 @@ use std::{
 };
 
 use super::{traits::JournalDB, LATEST_ERA_KEY};
-use crate::db_with_mertics::KeyValueDB;
+use crate::mertics::KeyValueDB;
 use bytes::Bytes;
 use ethereum_types::H256;
 use hash_db::HashDB;
@@ -265,7 +265,7 @@ mod tests {
     use JournalDB;
 
     fn new_db() -> RefCountedDB {
-        let backing = Arc::new(ethcore_db::InMemoryWithMetrics::create(0));
+        let backing = Arc::new(crate::InMemoryWithMetrics::create(0));
         RefCountedDB::new(backing, None)
     }
 

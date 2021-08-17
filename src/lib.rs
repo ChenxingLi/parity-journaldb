@@ -48,9 +48,11 @@ mod refcounteddb;
 mod traits;
 mod util;
 
-mod db_with_mertics;
+mod mertics;
 pub mod overlaydb;
-use db_with_mertics::KeyValueDB;
+#[cfg(test)]
+use mertics::InMemoryWithMetrics;
+use mertics::KeyValueDB;
 
 /// Export the `JournalDB` trait.
 pub use self::traits::JournalDB;

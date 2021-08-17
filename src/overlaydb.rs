@@ -23,7 +23,7 @@ use std::{
 };
 
 use super::error_negatively_reference_hash;
-use crate::db_with_mertics::KeyValueDB;
+use crate::mertics::KeyValueDB;
 use ethereum_types::H256;
 use hash_db::HashDB;
 use keccak_hasher::KeccakHasher;
@@ -89,7 +89,7 @@ impl OverlayDB {
     /// Create a new instance of OverlayDB with an anonymous temporary database.
     #[cfg(test)]
     pub fn new_temp() -> OverlayDB {
-        let backing = Arc::new(ethcore_db::InMemoryWithMetrics::create(0));
+        let backing = Arc::new(crate::InMemoryWithMetrics::create(0));
         Self::new(backing, None)
     }
 
