@@ -52,7 +52,7 @@ mod mertics;
 pub mod overlaydb;
 #[cfg(test)]
 use mertics::InMemoryWithMetrics;
-use mertics::KeyValueDB;
+pub use mertics::KeyValueDB;
 
 /// Export the `JournalDB` trait.
 pub use self::traits::JournalDB;
