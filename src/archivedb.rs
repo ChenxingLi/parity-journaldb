@@ -46,12 +46,12 @@ pub struct ArchiveDB {
     overlay: MemoryDB<KeccakHasher, DBValue>,
     backing: Arc<dyn KeyValueDB>,
     latest_era: Option<u64>,
-    column: Option<u32>,
+    column: u32,
 }
 
 impl ArchiveDB {
     /// Create a new instance from a key-value db.
-    pub fn new(backing: Arc<dyn KeyValueDB>, column: Option<u32>) -> ArchiveDB {
+    pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> ArchiveDB {
         let latest_era = backing
             .get(column, &LATEST_ERA_KEY)
             .expect("Low-level database error.")
@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn insert_same_in_fork() {
         // history is 1
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
         let x = jdb.insert(b"X");
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn long_history() {
         // history is 3
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
         let h = jdb.insert(b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.contains(&h));
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn multiple_owed_removal_not_allowed() {
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
         let h = jdb.insert(b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.contains(&h));
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn complex() {
         // history is 1
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
         let foo = jdb.insert(b"foo");
         let bar = jdb.insert(b"bar");
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn fork() {
         // history is 1
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
         let foo = jdb.insert(b"foo");
         let bar = jdb.insert(b"bar");
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn overwrite() {
         // history is 1
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
         let foo = jdb.insert(b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn fork_same_key() {
         // history is 1
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
 
         let foo = jdb.insert(b"foo");
@@ -405,27 +405,27 @@ mod tests {
 
     #[test]
     fn reopen() {
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
         let bar = H256::random();
 
         let foo = {
-            let mut jdb = ArchiveDB::new(shared_db.clone(), None);
+            let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
             let foo = jdb.insert(b"foo");
-            jdb.emplace(bar.clone(), DBValue::from_slice(b"bar"));
+            jdb.emplace(bar.clone(), (b"bar").to_vec());
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             foo
         };
 
         {
-            let mut jdb = ArchiveDB::new(shared_db.clone(), None);
+            let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             jdb.remove(&foo);
             jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
                 .unwrap();
         }
 
         {
-            let mut jdb = ArchiveDB::new(shared_db, None);
+            let mut jdb = ArchiveDB::new(shared_db, 0);
             assert!(jdb.contains(&foo));
             assert!(jdb.contains(&bar));
             jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
@@ -435,10 +435,10 @@ mod tests {
 
     #[test]
     fn reopen_remove() {
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
 
         let foo = {
-            let mut jdb = ArchiveDB::new(shared_db.clone(), None);
+            let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
             let foo = jdb.insert(b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
@@ -454,7 +454,7 @@ mod tests {
         };
 
         {
-            let mut jdb = ArchiveDB::new(shared_db, None);
+            let mut jdb = ArchiveDB::new(shared_db, 0);
             jdb.remove(&foo);
             jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
                 .unwrap();
@@ -469,9 +469,9 @@ mod tests {
 
     #[test]
     fn reopen_fork() {
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
         let (foo, _, _) = {
-            let mut jdb = ArchiveDB::new(shared_db.clone(), None);
+            let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
             let foo = jdb.insert(b"foo");
             let bar = jdb.insert(b"bar");
@@ -488,7 +488,7 @@ mod tests {
         };
 
         {
-            let mut jdb = ArchiveDB::new(shared_db, None);
+            let mut jdb = ArchiveDB::new(shared_db, 0);
             jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
                 .unwrap();
             assert!(jdb.contains(&foo));
@@ -497,11 +497,11 @@ mod tests {
 
     #[test]
     fn inject() {
-        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(0)), None);
+        let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
         let key = jdb.insert(b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), DBValue::from_slice(b"dog"));
+        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
         jdb.remove(&key);
         jdb.inject_batch().unwrap();
 
@@ -510,17 +510,17 @@ mod tests {
 
     #[test]
     fn returns_state() {
-        let shared_db = Arc::new(InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(InMemoryWithMetrics::create(1));
 
         let key = {
-            let mut jdb = ArchiveDB::new(shared_db.clone(), None);
+            let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             let key = jdb.insert(b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             key
         };
 
         {
-            let jdb = ArchiveDB::new(shared_db, None);
+            let jdb = ArchiveDB::new(shared_db, 0);
             let state = jdb.state(&key);
             assert!(state.is_some());
         }

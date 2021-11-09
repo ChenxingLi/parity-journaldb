@@ -111,12 +111,12 @@ pub struct EarlyMergeDB {
     backing: Arc<dyn KeyValueDB>,
     refs: Option<Arc<RwLock<HashMap<H256, RefInfo>>>>,
     latest_era: Option<u64>,
-    column: Option<u32>,
+    column: u32,
 }
 
 impl EarlyMergeDB {
     /// Create a new instance from file
-    pub fn new(backing: Arc<dyn KeyValueDB>, col: Option<u32>) -> EarlyMergeDB {
+    pub fn new(backing: Arc<dyn KeyValueDB>, col: u32) -> EarlyMergeDB {
         let (latest_era, refs) = EarlyMergeDB::read_refs(&*backing, col);
         let refs = Some(Arc::new(RwLock::new(refs)));
         EarlyMergeDB {
@@ -135,13 +135,13 @@ impl EarlyMergeDB {
     }
 
     // The next three are valid only as long as there is an insert operation of `key` in the journal.
-    fn set_already_in(batch: &mut DBTransaction, col: Option<u32>, key: &H256) {
+    fn set_already_in(batch: &mut DBTransaction, col: u32, key: &H256) {
         batch.put(col, &Self::morph_key(key, 0), &[1u8]);
     }
-    fn reset_already_in(batch: &mut DBTransaction, col: Option<u32>, key: &H256) {
+    fn reset_already_in(batch: &mut DBTransaction, col: u32, key: &H256) {
         batch.delete(col, &Self::morph_key(key, 0));
     }
-    fn is_already_in(backing: &dyn KeyValueDB, col: Option<u32>, key: &H256) -> bool {
+    fn is_already_in(backing: &dyn KeyValueDB, col: u32, key: &H256) -> bool {
         backing
             .get(col, &Self::morph_key(key, 0))
             .expect("Low-level database error. Some issue with your hard disk?")
@@ -151,7 +151,7 @@ impl EarlyMergeDB {
     fn insert_keys(
         inserts: &[(H256, DBValue)],
         backing: &dyn KeyValueDB,
-        col: Option<u32>,
+        col: u32,
         refs: &mut HashMap<H256, RefInfo>,
         batch: &mut DBTransaction,
     ) {
@@ -192,7 +192,7 @@ impl EarlyMergeDB {
     fn replay_keys(
         inserts: &[H256],
         backing: &dyn KeyValueDB,
-        col: Option<u32>,
+        col: u32,
         refs: &mut HashMap<H256, RefInfo>,
     ) {
         trace!(target: "jdb.fine", "replay_keys: inserts={:?}, refs={:?}", inserts, refs);
@@ -219,7 +219,7 @@ impl EarlyMergeDB {
         deletes: &[H256],
         refs: &mut HashMap<H256, RefInfo>,
         batch: &mut DBTransaction,
-        col: Option<u32>,
+        col: u32,
         from: RemoveFrom,
     ) {
         // with a remove on {queue_refs: 1, in_archive: true}, we have two options:
@@ -308,7 +308,7 @@ impl EarlyMergeDB {
             .expect("Low-level database error. Some issue with your hard disk?")
     }
 
-    fn read_refs(db: &dyn KeyValueDB, col: Option<u32>) -> (Option<u64>, HashMap<H256, RefInfo>) {
+    fn read_refs(db: &dyn KeyValueDB, col: u32) -> (Option<u64>, HashMap<H256, RefInfo>) {
         let mut refs = HashMap::new();
         let mut latest_era = None;
         if let Some(val) = db
@@ -914,27 +914,27 @@ mod tests {
     }
 
     fn new_db() -> EarlyMergeDB {
-        let backing = Arc::new(crate::InMemoryWithMetrics::create(0));
-        EarlyMergeDB::new(backing, None)
+        let backing = Arc::new(crate::InMemoryWithMetrics::create(1));
+        EarlyMergeDB::new(backing, 0)
     }
 
     #[test]
     fn reopen() {
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
         let bar = H256::random();
 
         let foo = {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
             let foo = jdb.insert(b"foo");
-            jdb.emplace(bar.clone(), DBValue::from_slice(b"bar"));
+            jdb.emplace(bar.clone(), (b"bar").to_vec());
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             assert!(jdb.can_reconstruct_refs());
             foo
         };
 
         {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             jdb.remove(&foo);
             jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
                 .unwrap();
@@ -942,7 +942,7 @@ mod tests {
         }
 
         {
-            let mut jdb = EarlyMergeDB::new(shared_db, None);
+            let mut jdb = EarlyMergeDB::new(shared_db, 0);
             assert!(jdb.contains(&foo));
             assert!(jdb.contains(&bar));
             jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
@@ -1106,11 +1106,11 @@ mod tests {
     fn reopen_remove_three() {
         let _ = ::env_logger::try_init();
 
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
         let foo = keccak(b"foo");
 
         {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
             jdb.insert(b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
@@ -1135,7 +1135,7 @@ mod tests {
             // incantation to reopen the db
         };
         {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
 
             jdb.remove(&foo);
             jdb.commit_batch(4, &keccak(b"4"), Some((2, keccak(b"2"))))
@@ -1146,7 +1146,7 @@ mod tests {
             // incantation to reopen the db
         };
         {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
 
             jdb.commit_batch(5, &keccak(b"5"), Some((3, keccak(b"3"))))
                 .unwrap();
@@ -1156,7 +1156,7 @@ mod tests {
             // incantation to reopen the db
         };
         {
-            let mut jdb = EarlyMergeDB::new(shared_db, None);
+            let mut jdb = EarlyMergeDB::new(shared_db, 0);
 
             jdb.commit_batch(6, &keccak(b"6"), Some((4, keccak(b"4"))))
                 .unwrap();
@@ -1167,10 +1167,10 @@ mod tests {
 
     #[test]
     fn reopen_fork() {
-        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(0));
+        let shared_db = Arc::new(crate::InMemoryWithMetrics::create(1));
 
         let (foo, bar, baz) = {
-            let mut jdb = EarlyMergeDB::new(shared_db.clone(), None);
+            let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
             let foo = jdb.insert(b"foo");
             let bar = jdb.insert(b"bar");
@@ -1190,7 +1190,7 @@ mod tests {
         };
 
         {
-            let mut jdb = EarlyMergeDB::new(shared_db, None);
+            let mut jdb = EarlyMergeDB::new(shared_db, 0);
             jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
@@ -1206,7 +1206,7 @@ mod tests {
         let key = jdb.insert(b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), DBValue::from_slice(b"dog"));
+        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
         jdb.remove(&key);
         jdb.inject_batch().unwrap();
 

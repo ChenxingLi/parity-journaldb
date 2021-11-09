@@ -62,12 +62,12 @@ pub struct RefCountedDB {
     latest_era: Option<u64>,
     inserts: Vec<H256>,
     removes: Vec<H256>,
-    column: Option<u32>,
+    column: u32,
 }
 
 impl RefCountedDB {
     /// Create a new instance given a `backing` database.
-    pub fn new(backing: Arc<dyn KeyValueDB>, column: Option<u32>) -> RefCountedDB {
+    pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> RefCountedDB {
         let latest_era = backing
             .get(column, &LATEST_ERA_KEY)
             .expect("Low-level database error.")
@@ -265,8 +265,8 @@ mod tests {
     use JournalDB;
 
     fn new_db() -> RefCountedDB {
-        let backing = Arc::new(crate::InMemoryWithMetrics::create(0));
-        RefCountedDB::new(backing, None)
+        let backing = Arc::new(crate::InMemoryWithMetrics::create(1));
+        RefCountedDB::new(backing, 0)
     }
 
     #[test]
@@ -389,7 +389,7 @@ mod tests {
         let key = jdb.insert(b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), DBValue::from_slice(b"dog"));
+        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
         jdb.remove(&key);
         jdb.inject_batch().unwrap();
 

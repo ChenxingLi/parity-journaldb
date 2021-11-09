@@ -52,6 +52,8 @@ mod mertics;
 pub mod overlaydb;
 #[cfg(test)]
 use mertics::InMemoryWithMetrics;
+#[cfg(test)]
+extern crate parity_util_mem05;
 pub use mertics::KeyValueDB;
 
 /// Export the `JournalDB` trait.
@@ -153,7 +155,7 @@ impl fmt::Display for Algorithm {
 pub fn new(
     backing: Arc<dyn crate::KeyValueDB>,
     algorithm: Algorithm,
-    col: Option<u32>,
+    col: u32,
 ) -> Box<dyn JournalDB> {
     match algorithm {
         Algorithm::Archive => Box::new(archivedb::ArchiveDB::new(backing, col)),

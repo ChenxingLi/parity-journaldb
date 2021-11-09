@@ -11,6 +11,8 @@ mod memory_db {
     // Copyright 2015-2020 Parity Technologies (UK) Ltd.
     // The following code is part of OpenEthereum.
 
+    use parity_util_mem05::{MallocSizeOf, MallocSizeOfOps};
+
     // OpenEthereum is free software: you can redistribute it and/or modify
     // it under the terms of the GNU General Public License as published by
     // the Free Software Foundation, either version 3 of the License, or
@@ -29,11 +31,17 @@ mod memory_db {
         db: kvdb_memorydb::InMemory,
     }
 
+    impl MallocSizeOf for InMemoryWithMetrics {
+        fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+            parity_util_mem05::MallocSizeOf::size_of(&self.db, ops)
+        }
+    }
+
     impl kvdb::KeyValueDB for InMemoryWithMetrics {
-        fn get(&self, col: Option<u32>, key: &[u8]) -> std::io::Result<Option<kvdb::DBValue>> {
+        fn get(&self, col: u32, key: &[u8]) -> std::io::Result<Option<kvdb::DBValue>> {
             self.db.get(col, key)
         }
-        fn get_by_prefix(&self, col: Option<u32>, prefix: &[u8]) -> Option<Box<[u8]>> {
+        fn get_by_prefix(&self, col: u32, prefix: &[u8]) -> Option<Box<[u8]>> {
             self.db.get_by_prefix(col, prefix)
         }
         fn write_buffered(&self, transaction: kvdb::DBTransaction) {
@@ -46,16 +54,13 @@ mod memory_db {
             self.db.flush()
         }
 
-        fn iter<'a>(
-            &'a self,
-            col: Option<u32>,
-        ) -> Box<(dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a)> {
+        fn iter<'a>(&'a self, col: u32) -> Box<(dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a)> {
             kvdb::KeyValueDB::iter(&self.db, col)
         }
 
         fn iter_from_prefix<'a>(
             &'a self,
-            col: Option<u32>,
+            col: u32,
             prefix: &'a [u8],
         ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
             self.db.iter_from_prefix(col, prefix)

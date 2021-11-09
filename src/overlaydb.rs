@@ -43,7 +43,7 @@ use rlp::{decode, encode, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 pub struct OverlayDB {
     overlay: MemoryDB<KeccakHasher, DBValue>,
     backing: Arc<dyn KeyValueDB>,
-    column: Option<u32>,
+    column: u32,
 }
 
 struct Payload {
@@ -69,7 +69,7 @@ impl Decodable for Payload {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let payload = Payload {
             count: rlp.val_at(0)?,
-            value: DBValue::from_slice(rlp.at(1)?.data()?),
+            value: rlp.at(1)?.data()?.to_vec(),
         };
 
         Ok(payload)
@@ -78,7 +78,7 @@ impl Decodable for Payload {
 
 impl OverlayDB {
     /// Create a new instance of OverlayDB given a `backing` database.
-    pub fn new(backing: Arc<dyn KeyValueDB>, col: Option<u32>) -> OverlayDB {
+    pub fn new(backing: Arc<dyn KeyValueDB>, col: u32) -> OverlayDB {
         OverlayDB {
             overlay: ::new_memory_db(),
             backing: backing,
@@ -89,8 +89,8 @@ impl OverlayDB {
     /// Create a new instance of OverlayDB with an anonymous temporary database.
     #[cfg(test)]
     pub fn new_temp() -> OverlayDB {
-        let backing = Arc::new(crate::InMemoryWithMetrics::create(0));
-        Self::new(backing, None)
+        let backing = Arc::new(crate::InMemoryWithMetrics::create(1));
+        Self::new(backing, 0)
     }
 
     /// Commit all operations in a single batch.
@@ -276,7 +276,7 @@ fn overlaydb_revert() {
 fn overlaydb_overlay_insert_and_remove() {
     let mut trie = OverlayDB::new_temp();
     let h = trie.insert(b"hello world");
-    assert_eq!(trie.get(&h).unwrap(), DBValue::from_slice(b"hello world"));
+    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
     trie.remove(&h);
     assert_eq!(trie.get(&h), None);
 }
@@ -285,11 +285,11 @@ fn overlaydb_overlay_insert_and_remove() {
 fn overlaydb_backing_insert_revert() {
     let mut trie = OverlayDB::new_temp();
     let h = trie.insert(b"hello world");
-    assert_eq!(trie.get(&h).unwrap(), DBValue::from_slice(b"hello world"));
+    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&h).unwrap(), DBValue::from_slice(b"hello world"));
+    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
     trie.revert();
-    assert_eq!(trie.get(&h).unwrap(), DBValue::from_slice(b"hello world"));
+    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn overlaydb_backing_remove_revert() {
     trie.remove(&h);
     assert_eq!(trie.get(&h), None);
     trie.revert();
-    assert_eq!(trie.get(&h).unwrap(), DBValue::from_slice(b"hello world"));
+    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
 }
 
 #[test]
@@ -331,29 +331,29 @@ fn overlaydb_negative() {
 fn overlaydb_complex() {
     let mut trie = OverlayDB::new_temp();
     let hfoo = trie.insert(b"foo");
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     let hbar = trie.insert(b"bar");
-    assert_eq!(trie.get(&hbar).unwrap(), DBValue::from_slice(b"bar"));
+    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
-    assert_eq!(trie.get(&hbar).unwrap(), DBValue::from_slice(b"bar"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
     trie.insert(b"foo"); // two refs
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
-    assert_eq!(trie.get(&hbar).unwrap(), DBValue::from_slice(b"bar"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
     trie.remove(&hbar); // zero refs - delete
     assert_eq!(trie.get(&hbar), None);
     trie.remove(&hfoo); // one ref - keep
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     trie.remove(&hfoo); // zero ref - would delete, but...
     assert_eq!(trie.get(&hfoo), None);
     trie.insert(b"foo"); // one ref - keep after all.
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), DBValue::from_slice(b"foo"));
+    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
     trie.remove(&hfoo); // zero ref - delete
     assert_eq!(trie.get(&hfoo), None);
     trie.commit().unwrap(); //
