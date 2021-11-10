@@ -27,13 +27,13 @@ use kvdb::{DBTransaction, DBValue};
 use std::collections::{BTreeMap, HashMap};
 
 /// expose keys of a hashDB for debugging or tests (slow).
-pub trait KeyedHashDB: HashDB<KeccakHasher, DBValue> {
+pub trait KeyedHashDB: HashDB<KeccakHasher, trie_db::DBValue> {
     /// Primarily use for tests, highly inefficient.
     fn keys(&self) -> HashMap<H256, i32>;
 }
 
 /// Upcast to `KeyedHashDB`
-pub trait AsKeyedHashDB: AsHashDB<KeccakHasher, DBValue> {
+pub trait AsKeyedHashDB: AsHashDB<KeccakHasher, trie_db::DBValue> {
     /// Perform upcast to KeyedHashDB.
     fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB;
 }

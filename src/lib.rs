@@ -28,6 +28,7 @@ extern crate memory_db;
 extern crate parity_bytes as bytes;
 extern crate parity_util_mem;
 extern crate parking_lot;
+extern crate trie_db;
 extern crate rlp;
 
 #[cfg(test)]

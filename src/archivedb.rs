@@ -82,7 +82,7 @@ impl HashDB<KeccakHasher, DBValue> for ArchiveDB {
     }
 
     fn contains(&self, key: &H256) -> bool {
-        self.get(key).is_some()
+        HashDB::<KeccakHasher, DBValue>::get(self, key).is_some()
     }
 
     fn insert(&mut self, value: &[u8]) -> H256 {
@@ -234,12 +234,14 @@ mod tests {
     use keccak::keccak;
     use JournalDB;
 
+    type TestHashDB = dyn HashDB<KeccakHasher, DBValue>;
+
     #[test]
     fn insert_same_in_fork() {
         // history is 1
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
-        let x = jdb.insert(b"X");
+        let x = TestHashDB::insert(&mut jdb, b"X");
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
         jdb.commit_batch(3, &keccak(b"1002a"), Some((1, keccak(b"1"))))
@@ -247,10 +249,10 @@ mod tests {
         jdb.commit_batch(4, &keccak(b"1003a"), Some((2, keccak(b"2"))))
             .unwrap();
 
-        jdb.remove(&x);
+        TestHashDB::remove(&mut jdb, &x);
         jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1"))))
             .unwrap();
-        let x = jdb.insert(b"X");
+        let x = TestHashDB::insert(&mut jdb, b"X");
         jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2"))))
             .unwrap();
 
@@ -259,38 +261,38 @@ mod tests {
         jdb.commit_batch(6, &keccak(b"1005a"), Some((4, keccak(b"1003a"))))
             .unwrap();
 
-        assert!(jdb.contains(&x));
+        assert!(TestHashDB::contains(&jdb, &x));
     }
 
     #[test]
     fn long_history() {
         // history is 3
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
-        let h = jdb.insert(b"foo");
+        let h = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&h));
-        jdb.remove(&h);
+        assert!(TestHashDB::contains(&jdb, &h));
+        TestHashDB::remove(&mut jdb, &h);
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
             .unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
             .unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
     }
 
     #[test]
     #[should_panic]
     fn multiple_owed_removal_not_allowed() {
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
-        let h = jdb.insert(b"foo");
+        let h = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&h));
-        jdb.remove(&h);
-        jdb.remove(&h);
+        assert!(TestHashDB::contains(&jdb, &h));
+        TestHashDB::remove(&mut jdb, &h);
+        TestHashDB::remove(&mut jdb, &h);
         // commit_batch would call journal_under(),
         // and we don't allow multiple owned removals.
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
@@ -301,32 +303,32 @@ mod tests {
         // history is 1
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        jdb.remove(&bar);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        TestHashDB::remove(&mut jdb, &bar);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        let foo = jdb.insert(b"foo");
-        jdb.remove(&baz);
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        TestHashDB::remove(&mut jdb, &baz);
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
         jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
             .unwrap();
@@ -337,28 +339,28 @@ mod tests {
         // history is 1
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
 
-        jdb.remove(&bar);
+        TestHashDB::remove(&mut jdb, &bar);
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
 
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
         jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -366,21 +368,21 @@ mod tests {
         // history is 1
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
-        jdb.insert(b"foo");
-        assert!(jdb.contains(&foo));
+        TestHashDB::insert(&mut jdb, b"foo");
+        assert!(TestHashDB::contains(&jdb, &foo));
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
         jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -389,18 +391,18 @@ mod tests {
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
         jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -411,7 +413,7 @@ mod tests {
         let foo = {
             let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
-            let foo = jdb.insert(b"foo");
+            let foo = TestHashDB::insert(&mut jdb, b"foo");
             jdb.emplace(bar.clone(), (b"bar").to_vec());
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             foo
@@ -419,15 +421,15 @@ mod tests {
 
         {
             let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
-            jdb.remove(&foo);
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
                 .unwrap();
         }
 
         {
             let mut jdb = ArchiveDB::new(shared_db, 0);
-            assert!(jdb.contains(&foo));
-            assert!(jdb.contains(&bar));
+            assert!(TestHashDB::contains(&jdb, &foo));
+            assert!(TestHashDB::contains(&jdb, &bar));
             jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
                 .unwrap();
         }
@@ -440,14 +442,14 @@ mod tests {
         let foo = {
             let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
-            let foo = jdb.insert(b"foo");
+            let foo = TestHashDB::insert(&mut jdb, b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
                 .unwrap();
 
             // foo is ancient history.
 
-            jdb.insert(b"foo");
+            TestHashDB::insert(&mut jdb, b"foo");
             jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
                 .unwrap();
             foo
@@ -455,11 +457,11 @@ mod tests {
 
         {
             let mut jdb = ArchiveDB::new(shared_db, 0);
-            jdb.remove(&foo);
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
                 .unwrap();
-            assert!(jdb.contains(&foo));
-            jdb.remove(&foo);
+            assert!(TestHashDB::contains(&jdb, &foo));
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
                 .unwrap();
             jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4"))))
@@ -473,15 +475,15 @@ mod tests {
         let (foo, _, _) = {
             let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
             // history is 1
-            let foo = jdb.insert(b"foo");
-            let bar = jdb.insert(b"bar");
+            let foo = TestHashDB::insert(&mut jdb, b"foo");
+            let bar = TestHashDB::insert(&mut jdb, b"bar");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-            jdb.remove(&foo);
-            let baz = jdb.insert(b"baz");
+            TestHashDB::remove(&mut jdb, &foo);
+            let baz = TestHashDB::insert(&mut jdb, b"baz");
             jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
                 .unwrap();
 
-            jdb.remove(&bar);
+            TestHashDB::remove(&mut jdb, &bar);
             jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
                 .unwrap();
             (foo, bar, baz)
@@ -491,21 +493,21 @@ mod tests {
             let mut jdb = ArchiveDB::new(shared_db, 0);
             jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
                 .unwrap();
-            assert!(jdb.contains(&foo));
+            assert!(TestHashDB::contains(&jdb, &foo));
         }
     }
 
     #[test]
     fn inject() {
         let mut jdb = ArchiveDB::new(Arc::new(crate::InMemoryWithMetrics::create(1)), 0);
-        let key = jdb.insert(b"dog");
+        let key = TestHashDB::insert(&mut jdb, b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
-        jdb.remove(&key);
+        assert_eq!(TestHashDB::get(&jdb, &key).unwrap(), (b"dog").to_vec());
+        TestHashDB::remove(&mut jdb, &key);
         jdb.inject_batch().unwrap();
 
-        assert!(jdb.get(&key).is_none());
+        assert!(TestHashDB::get(&jdb, &key).is_none());
     }
 
     #[test]
@@ -514,7 +516,7 @@ mod tests {
 
         let key = {
             let mut jdb = ArchiveDB::new(shared_db.clone(), 0);
-            let key = jdb.insert(b"foo");
+            let key = TestHashDB::insert(&mut jdb, b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             key
         };

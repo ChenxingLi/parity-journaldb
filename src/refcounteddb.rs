@@ -86,20 +86,21 @@ impl RefCountedDB {
 
 impl HashDB<KeccakHasher, DBValue> for RefCountedDB {
     fn get(&self, key: &H256) -> Option<DBValue> {
-        self.forward.get(key)
+        HashDB::<KeccakHasher, DBValue>::get(&self.forward, key)
     }
     fn contains(&self, key: &H256) -> bool {
-        self.forward.contains(key)
+        HashDB::<KeccakHasher, DBValue>::contains(&self.forward, key)
     }
     fn insert(&mut self, value: &[u8]) -> H256 {
-        let r = self.forward.insert(value);
+        let r = HashDB::<KeccakHasher, DBValue>::insert(&mut self.forward, value);
         self.inserts.push(r.clone());
         r
     }
     fn emplace(&mut self, key: H256, value: DBValue) {
         self.inserts.push(key.clone());
-        self.forward.emplace(key, value);
+        HashDB::<KeccakHasher, DBValue>::emplace(&mut self.forward, key, value);
     }
+
     fn remove(&mut self, key: &H256) {
         self.removes.push(key.clone());
     }
@@ -219,7 +220,7 @@ impl JournalDB for RefCountedDB {
             .expect("rlp read from db; qed");
             trace!(target: "rcdb", "delete journal for time #{}.{}=>{}, (canon was {}): deleting {:?}", end_era, db_key.index, our_id, canon_id, to_remove);
             for i in &to_remove {
-                self.forward.remove(i);
+                HashDB::<KeccakHasher, DBValue>::remove(&mut self.forward, i);
             }
             batch.delete(self.column, &last);
             db_key.index += 1;
@@ -232,7 +233,7 @@ impl JournalDB for RefCountedDB {
     fn inject(&mut self, batch: &mut DBTransaction) -> io::Result<u32> {
         self.inserts.clear();
         for remove in self.removes.drain(..) {
-            self.forward.remove(&remove);
+            HashDB::<KeccakHasher, DBValue>::remove(&mut self.forward, &remove);
         }
         self.forward.commit_to_batch(batch)
     }
@@ -244,7 +245,7 @@ impl JournalDB for RefCountedDB {
             }
 
             for _ in rc..0 {
-                self.remove(&key);
+                HashDB::<KeccakHasher, DBValue>::remove(self, &key);
             }
         }
     }
@@ -264,6 +265,8 @@ mod tests {
     use keccak::keccak;
     use JournalDB;
 
+    type TestHashDB = dyn HashDB<KeccakHasher, DBValue>;
+
     fn new_db() -> RefCountedDB {
         let backing = Arc::new(crate::InMemoryWithMetrics::create(1));
         RefCountedDB::new(backing, 0)
@@ -273,20 +276,20 @@ mod tests {
     fn long_history() {
         // history is 3
         let mut jdb = new_db();
-        let h = jdb.insert(b"foo");
+        let h = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&h));
-        jdb.remove(&h);
+        assert!(TestHashDB::contains(&jdb, &h));
+        TestHashDB::remove(&mut jdb, &h);
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
             .unwrap();
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
             .unwrap();
-        assert!(!jdb.contains(&h));
+        assert!(!TestHashDB::contains(&jdb, &h));
     }
 
     #[test]
@@ -294,10 +297,10 @@ mod tests {
         // history is 3
         let mut jdb = new_db();
         assert_eq!(jdb.latest_era(), None);
-        let h = jdb.insert(b"foo");
+        let h = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert_eq!(jdb.latest_era(), Some(0));
-        jdb.remove(&h);
+        TestHashDB::remove(&mut jdb, &h);
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         assert_eq!(jdb.latest_era(), Some(1));
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
@@ -315,41 +318,41 @@ mod tests {
         // history is 1
         let mut jdb = new_db();
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        jdb.remove(&bar);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        TestHashDB::remove(&mut jdb, &bar);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        let foo = jdb.insert(b"foo");
-        jdb.remove(&baz);
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        TestHashDB::remove(&mut jdb, &baz);
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(!jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(!TestHashDB::contains(&jdb, &baz));
 
         jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
             .unwrap();
-        assert!(!jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(!jdb.contains(&baz));
+        assert!(!TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(!TestHashDB::contains(&jdb, &baz));
     }
 
     #[test]
@@ -357,42 +360,42 @@ mod tests {
         // history is 1
         let mut jdb = new_db();
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
 
-        jdb.remove(&bar);
+        TestHashDB::remove(&mut jdb, &bar);
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
 
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
         jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
             .unwrap();
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&baz));
-        assert!(!jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &baz));
+        assert!(!TestHashDB::contains(&jdb, &bar));
     }
 
     #[test]
     fn inject() {
         let mut jdb = new_db();
-        let key = jdb.insert(b"dog");
+        let key = TestHashDB::insert(&mut jdb, b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
-        jdb.remove(&key);
+        assert_eq!(TestHashDB::get(&jdb, &key).unwrap(), (b"dog").to_vec());
+        TestHashDB::remove(&mut jdb, &key);
         jdb.inject_batch().unwrap();
 
-        assert!(jdb.get(&key).is_none());
+        assert!(TestHashDB::get(&jdb, &key).is_none());
     }
 }

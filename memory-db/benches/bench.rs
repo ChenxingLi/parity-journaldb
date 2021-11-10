@@ -73,7 +73,7 @@ fn contains_with_non_null_key(b: &mut Criterion) {
     m.insert(b"abcefghijklmnopqrstuvxyz");
     b.bench_function("contains_with_non_null_key", move |b| {
         b.iter(|| {
-            m.contains(&key);
+            TestHashDB::contains(&m, &key);
         })
     });
 }
@@ -84,7 +84,7 @@ fn contains_with_null_key(b: &mut Criterion) {
     m.insert(b"abcefghijklmnopqrstuvxyz");
     b.bench_function("contains_with_null_key", move |b| {
         b.iter(|| {
-            m.contains(&null_key);
+            TestHashDB::contains(&m, &null_key);
         })
     });
 }

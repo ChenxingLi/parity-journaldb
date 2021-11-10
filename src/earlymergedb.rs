@@ -350,7 +350,7 @@ impl HashDB<KeccakHasher, DBValue> for EarlyMergeDB {
     }
 
     fn contains(&self, key: &H256) -> bool {
-        self.get(key).is_some()
+        HashDB::<KeccakHasher, DBValue>::get(self, key).is_some()
     }
 
     fn insert(&mut self, value: &[u8]) -> H256 {
@@ -625,12 +625,14 @@ mod tests {
     use hash_db::HashDB;
     use keccak::keccak;
 
+    type TestHashDB = dyn HashDB<KeccakHasher, DBValue>;
+
     #[test]
     fn insert_same_in_fork() {
         // history is 1
         let mut jdb = new_db();
 
-        let x = jdb.insert(b"X");
+        let x: H256 = HashDB::<KeccakHasher, DBValue>::insert(&mut jdb, b"X");
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
@@ -642,11 +644,11 @@ mod tests {
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&x);
+        TestHashDB::remove(&mut jdb, &x);
         jdb.commit_batch(3, &keccak(b"1002b"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        let x = jdb.insert(b"X");
+        let x = TestHashDB::insert(&mut jdb, b"X");
         jdb.commit_batch(4, &keccak(b"1003b"), Some((2, keccak(b"2"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -658,54 +660,54 @@ mod tests {
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        assert!(jdb.contains(&x));
+        assert!(TestHashDB::contains(&jdb, &x));
     }
 
     #[test]
     fn insert_older_era() {
         let mut jdb = new_db();
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0a"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        let bar = jdb.insert(b"bar");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0a"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&bar);
+        TestHashDB::remove(&mut jdb, &bar);
         jdb.commit_batch(0, &keccak(b"0b"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
 
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
     }
 
     #[test]
     fn long_history() {
         // history is 3
         let mut jdb = new_db();
-        let h = jdb.insert(b"foo");
+        let h = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&h));
-        jdb.remove(&h);
+        assert!(TestHashDB::contains(&jdb, &h));
+        TestHashDB::remove(&mut jdb, &h);
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(3, &keccak(b"3"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&h));
+        assert!(TestHashDB::contains(&jdb, &h));
         jdb.commit_batch(4, &keccak(b"4"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(!jdb.contains(&h));
+        assert!(!TestHashDB::contains(&jdb, &h));
     }
 
     #[test]
@@ -713,46 +715,46 @@ mod tests {
         // history is 1
         let mut jdb = new_db();
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        jdb.remove(&bar);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        TestHashDB::remove(&mut jdb, &bar);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        let foo = jdb.insert(b"foo");
-        jdb.remove(&baz);
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        TestHashDB::remove(&mut jdb, &baz);
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(!jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(!TestHashDB::contains(&jdb, &baz));
 
         jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(!jdb.contains(&foo));
-        assert!(!jdb.contains(&bar));
-        assert!(!jdb.contains(&baz));
+        assert!(!TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &bar));
+        assert!(!TestHashDB::contains(&jdb, &baz));
     }
 
     #[test]
@@ -760,34 +762,34 @@ mod tests {
         // history is 1
         let mut jdb = new_db();
 
-        let foo = jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
 
-        jdb.remove(&foo);
-        let baz = jdb.insert(b"baz");
+        TestHashDB::remove(&mut jdb, &foo);
+        let baz = TestHashDB::insert(&mut jdb, b"baz");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&bar);
+        TestHashDB::remove(&mut jdb, &bar);
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        assert!(jdb.contains(&foo));
-        assert!(jdb.contains(&bar));
-        assert!(jdb.contains(&baz));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(TestHashDB::contains(&jdb, &bar));
+        assert!(TestHashDB::contains(&jdb, &baz));
 
         jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
-        assert!(!jdb.contains(&baz));
-        assert!(!jdb.contains(&bar));
+        assert!(TestHashDB::contains(&jdb, &foo));
+        assert!(!TestHashDB::contains(&jdb, &baz));
+        assert!(!TestHashDB::contains(&jdb, &bar));
     }
 
     #[test]
@@ -795,25 +797,25 @@ mod tests {
         // history is 1
         let mut jdb = new_db();
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.insert(b"foo");
-        assert!(jdb.contains(&foo));
+        TestHashDB::insert(&mut jdb, b"foo");
+        assert!(TestHashDB::contains(&jdb, &foo));
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
         jdb.commit_batch(3, &keccak(b"2"), Some((0, keccak(b"2"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -822,27 +824,27 @@ mod tests {
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
         jdb.commit_batch(2, &keccak(b"2a"), Some((1, keccak(b"1a"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -851,27 +853,27 @@ mod tests {
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1c"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
         jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -880,26 +882,26 @@ mod tests {
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(2, &keccak(b"2a"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(2, &keccak(b"2b"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(3, &keccak(b"3a"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(3, &keccak(b"3b"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -926,7 +928,7 @@ mod tests {
         let foo = {
             let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
-            let foo = jdb.insert(b"foo");
+            let foo = TestHashDB::insert(&mut jdb, b"foo");
             jdb.emplace(bar.clone(), (b"bar").to_vec());
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             assert!(jdb.can_reconstruct_refs());
@@ -935,7 +937,7 @@ mod tests {
 
         {
             let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
-            jdb.remove(&foo);
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
@@ -943,12 +945,12 @@ mod tests {
 
         {
             let mut jdb = EarlyMergeDB::new(shared_db, 0);
-            assert!(jdb.contains(&foo));
-            assert!(jdb.contains(&bar));
+            assert!(TestHashDB::contains(&jdb, &foo));
+            assert!(TestHashDB::contains(&jdb, &bar));
             jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(!jdb.contains(&foo));
+            assert!(!TestHashDB::contains(&jdb, &foo));
         }
     }
 
@@ -959,19 +961,19 @@ mod tests {
         let mut jdb = new_db();
 
         // history is 4
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(2, &keccak(b"2"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(4, &keccak(b"4"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -987,40 +989,40 @@ mod tests {
         let mut jdb = new_db();
 
         // history is 4
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(1, &keccak(b"1a"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(1, &keccak(b"1b"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(2, &keccak(b"2a"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(2, &keccak(b"2b"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3a"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(3, &keccak(b"3b"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(4, &keccak(b"4a"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(4, &keccak(b"4b"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -1036,25 +1038,25 @@ mod tests {
         let mut jdb = new_db();
 
         // history is 1
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(1, &keccak(b"1"), Some((0, keccak(b"0"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
         // foo is ancient history.
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(2, &keccak(b"2"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
 
-        jdb.insert(b"foo");
+        TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(3, &keccak(b"3"), Some((2, keccak(b"2"))))
             .unwrap(); // BROKEN
         assert!(jdb.can_reconstruct_refs());
-        assert!(jdb.contains(&foo));
+        assert!(TestHashDB::contains(&jdb, &foo));
 
-        jdb.remove(&foo);
+        TestHashDB::remove(&mut jdb, &foo);
         jdb.commit_batch(4, &keccak(b"4"), Some((3, keccak(b"3"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -1062,7 +1064,7 @@ mod tests {
         jdb.commit_batch(5, &keccak(b"5"), Some((4, keccak(b"4"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        assert!(!jdb.contains(&foo));
+        assert!(!TestHashDB::contains(&jdb, &foo));
     }
 
     #[test]
@@ -1070,7 +1072,7 @@ mod tests {
         let mut jdb = new_db();
 
         // history is 4
-        let foo = jdb.insert(b"foo");
+        let foo = TestHashDB::insert(&mut jdb, b"foo");
         jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
         assert!(jdb.can_reconstruct_refs());
         jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
@@ -1085,18 +1087,18 @@ mod tests {
 
         // foo is ancient history.
 
-        jdb.insert(b"foo");
-        let bar = jdb.insert(b"bar");
+        TestHashDB::insert(&mut jdb, b"foo");
+        let bar = TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(5, &keccak(b"5"), Some((1, keccak(b"1"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.remove(&foo);
-        jdb.remove(&bar);
+        TestHashDB::remove(&mut jdb, &foo);
+        TestHashDB::remove(&mut jdb, &bar);
         jdb.commit_batch(6, &keccak(b"6"), Some((2, keccak(b"2"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
-        jdb.insert(b"foo");
-        jdb.insert(b"bar");
+        TestHashDB::insert(&mut jdb, b"foo");
+        TestHashDB::insert(&mut jdb, b"bar");
         jdb.commit_batch(7, &keccak(b"7"), Some((3, keccak(b"3"))))
             .unwrap();
         assert!(jdb.can_reconstruct_refs());
@@ -1112,7 +1114,7 @@ mod tests {
         {
             let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
-            jdb.insert(b"foo");
+            TestHashDB::insert(&mut jdb, b"foo");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             assert!(jdb.can_reconstruct_refs());
             jdb.commit_batch(1, &keccak(b"1"), None).unwrap();
@@ -1120,28 +1122,28 @@ mod tests {
 
             // foo is ancient history.
 
-            jdb.remove(&foo);
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(2, &keccak(b"2"), Some((0, keccak(b"0"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(jdb.contains(&foo));
+            assert!(TestHashDB::contains(&jdb, &foo));
 
-            jdb.insert(b"foo");
+            TestHashDB::insert(&mut jdb, b"foo");
             jdb.commit_batch(3, &keccak(b"3"), Some((1, keccak(b"1"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(jdb.contains(&foo));
+            assert!(TestHashDB::contains(&jdb, &foo));
 
             // incantation to reopen the db
         };
         {
             let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
 
-            jdb.remove(&foo);
+            TestHashDB::remove(&mut jdb, &foo);
             jdb.commit_batch(4, &keccak(b"4"), Some((2, keccak(b"2"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(jdb.contains(&foo));
+            assert!(TestHashDB::contains(&jdb, &foo));
 
             // incantation to reopen the db
         };
@@ -1151,7 +1153,7 @@ mod tests {
             jdb.commit_batch(5, &keccak(b"5"), Some((3, keccak(b"3"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(jdb.contains(&foo));
+            assert!(TestHashDB::contains(&jdb, &foo));
 
             // incantation to reopen the db
         };
@@ -1161,7 +1163,7 @@ mod tests {
             jdb.commit_batch(6, &keccak(b"6"), Some((4, keccak(b"4"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(!jdb.contains(&foo));
+            assert!(!TestHashDB::contains(&jdb, &foo));
         }
     }
 
@@ -1172,17 +1174,17 @@ mod tests {
         let (foo, bar, baz) = {
             let mut jdb = EarlyMergeDB::new(shared_db.clone(), 0);
             // history is 1
-            let foo = jdb.insert(b"foo");
-            let bar = jdb.insert(b"bar");
+            let foo = TestHashDB::insert(&mut jdb, b"foo");
+            let bar = TestHashDB::insert(&mut jdb, b"bar");
             jdb.commit_batch(0, &keccak(b"0"), None).unwrap();
             assert!(jdb.can_reconstruct_refs());
-            jdb.remove(&foo);
-            let baz = jdb.insert(b"baz");
+            TestHashDB::remove(&mut jdb, &foo);
+            let baz = TestHashDB::insert(&mut jdb, b"baz");
             jdb.commit_batch(1, &keccak(b"1a"), Some((0, keccak(b"0"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
 
-            jdb.remove(&bar);
+            TestHashDB::remove(&mut jdb, &bar);
             jdb.commit_batch(1, &keccak(b"1b"), Some((0, keccak(b"0"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
@@ -1194,22 +1196,22 @@ mod tests {
             jdb.commit_batch(2, &keccak(b"2b"), Some((1, keccak(b"1b"))))
                 .unwrap();
             assert!(jdb.can_reconstruct_refs());
-            assert!(jdb.contains(&foo));
-            assert!(!jdb.contains(&baz));
-            assert!(!jdb.contains(&bar));
+            assert!(TestHashDB::contains(&jdb, &foo));
+            assert!(!TestHashDB::contains(&jdb, &baz));
+            assert!(!TestHashDB::contains(&jdb, &bar));
         }
     }
 
     #[test]
     fn inject() {
         let mut jdb = new_db();
-        let key = jdb.insert(b"dog");
+        let key = TestHashDB::insert(&mut jdb, b"dog");
         jdb.inject_batch().unwrap();
 
-        assert_eq!(jdb.get(&key).unwrap(), (b"dog").to_vec());
-        jdb.remove(&key);
+        assert_eq!(TestHashDB::get(&jdb, &key).unwrap(), (b"dog").to_vec());
+        TestHashDB::remove(&mut jdb, &key);
         jdb.inject_batch().unwrap();
 
-        assert!(jdb.get(&key).is_none());
+        assert!(TestHashDB::get(&jdb, &key).is_none());
     }
 }

@@ -53,30 +53,30 @@ type FastMap<H, T> =
 ///   let d = "Hello world!".as_bytes();
 ///
 ///   let k = m.insert(d);
-///   assert!(m.contains(&k));
+///   assert!(TestHashDB::contains(&m, &k));
 ///   assert_eq!(m.get(&k).unwrap(), d);
 ///
 ///   m.insert(d);
-///   assert!(m.contains(&k));
+///   assert!(TestHashDB::contains(&m, &k));
 ///
 ///   m.remove(&k);
-///   assert!(m.contains(&k));
+///   assert!(TestHashDB::contains(&m, &k));
 ///
 ///   m.remove(&k);
-///   assert!(!m.contains(&k));
+///   assert!(!TestHashDB::contains(&m, &k));
 ///
 ///   m.remove(&k);
-///   assert!(!m.contains(&k));
+///   assert!(!TestHashDB::contains(&m, &k));
 ///
 ///   m.insert(d);
-///   assert!(!m.contains(&k));
+///   assert!(!TestHashDB::contains(&m, &k));
 
 ///   m.insert(d);
-///   assert!(m.contains(&k));
+///   assert!(TestHashDB::contains(&m, &k));
 ///   assert_eq!(m.get(&k).unwrap(), d);
 ///
 ///   m.remove(&k);
-///   assert!(!m.contains(&k));
+///   assert!(!TestHashDB::contains(&m, &k));
 /// }
 /// ```
 #[derive(Clone, PartialEq)]
@@ -173,9 +173,9 @@ where
     ///   let mut m = MemoryDB::<KeccakHasher, Vec<u8>>::default();
     ///   let hello_bytes = "Hello world!".as_bytes();
     ///   let hash = m.insert(hello_bytes);
-    ///   assert!(m.contains(&hash));
+    ///   assert!(TestHashDB::contains(&m, &hash));
     ///   m.clear();
-    ///   assert!(!m.contains(&hash));
+    ///   assert!(!TestHashDB::contains(&m, &hash));
     /// }
     /// ```
     pub fn clear(&mut self) {

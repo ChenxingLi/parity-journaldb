@@ -256,106 +256,124 @@ impl HashDB<KeccakHasher, DBValue> for OverlayDB {
     }
 }
 
+#[cfg(test)]
+type TestHashDB = dyn HashDB<KeccakHasher, DBValue>;
+
 #[test]
 fn overlaydb_revert() {
     let mut m = OverlayDB::new_temp();
-    let foo = m.insert(b"foo"); // insert foo.
+    let foo = TestHashDB::insert(&mut m, b"foo"); // insert foo.
     let mut batch = m.backing.transaction();
     m.commit_to_batch(&mut batch).unwrap(); // commit - new operations begin here...
     m.backing.write(batch).unwrap();
-    let bar = m.insert(b"bar"); // insert bar.
-    m.remove(&foo); // remove foo.
-    assert!(!m.contains(&foo)); // foo is gone.
-    assert!(m.contains(&bar)); // bar is here.
+    let bar = TestHashDB::insert(&mut m, b"bar"); // insert bar.
+    TestHashDB::remove(&mut m, &foo); // remove foo.
+    assert!(!TestHashDB::contains(&m, &foo)); // foo is gone.
+    assert!(TestHashDB::contains(&m, &bar)); // bar is here.
     m.revert(); // revert the last two operations.
-    assert!(m.contains(&foo)); // foo is here.
-    assert!(!m.contains(&bar)); // bar is gone.
+    assert!(TestHashDB::contains(&m, &foo)); // foo is here.
+    assert!(!TestHashDB::contains(&m, &bar)); // bar is gone.
 }
 
 #[test]
 fn overlaydb_overlay_insert_and_remove() {
     let mut trie = OverlayDB::new_temp();
-    let h = trie.insert(b"hello world");
-    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
-    trie.remove(&h);
-    assert_eq!(trie.get(&h), None);
+    let h = TestHashDB::insert(&mut trie, b"hello world");
+    assert_eq!(
+        TestHashDB::get(&trie, &h).unwrap(),
+        (b"hello world").to_vec()
+    );
+    TestHashDB::remove(&mut trie, &h);
+    assert_eq!(TestHashDB::get(&trie, &h), None);
 }
 
 #[test]
 fn overlaydb_backing_insert_revert() {
     let mut trie = OverlayDB::new_temp();
-    let h = trie.insert(b"hello world");
-    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
+    let h = TestHashDB::insert(&mut trie, b"hello world");
+    assert_eq!(
+        TestHashDB::get(&trie, &h).unwrap(),
+        (b"hello world").to_vec()
+    );
     trie.commit().unwrap();
-    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
+    assert_eq!(
+        TestHashDB::get(&trie, &h).unwrap(),
+        (b"hello world").to_vec()
+    );
     trie.revert();
-    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
+    assert_eq!(
+        TestHashDB::get(&trie, &h).unwrap(),
+        (b"hello world").to_vec()
+    );
 }
 
 #[test]
 fn overlaydb_backing_remove() {
     let mut trie = OverlayDB::new_temp();
-    let h = trie.insert(b"hello world");
+    let h = TestHashDB::insert(&mut trie, b"hello world");
     trie.commit().unwrap();
-    trie.remove(&h);
-    assert_eq!(trie.get(&h), None);
+    TestHashDB::remove(&mut trie, &h);
+    assert_eq!(TestHashDB::get(&trie, &h), None);
     trie.commit().unwrap();
-    assert_eq!(trie.get(&h), None);
+    assert_eq!(TestHashDB::get(&trie, &h), None);
     trie.revert();
-    assert_eq!(trie.get(&h), None);
+    assert_eq!(TestHashDB::get(&trie, &h), None);
 }
 
 #[test]
 fn overlaydb_backing_remove_revert() {
     let mut trie = OverlayDB::new_temp();
-    let h = trie.insert(b"hello world");
+    let h = TestHashDB::insert(&mut trie, b"hello world");
     trie.commit().unwrap();
-    trie.remove(&h);
-    assert_eq!(trie.get(&h), None);
+    TestHashDB::remove(&mut trie, &h);
+    assert_eq!(TestHashDB::get(&trie, &h), None);
     trie.revert();
-    assert_eq!(trie.get(&h).unwrap(), (b"hello world").to_vec());
+    assert_eq!(
+        TestHashDB::get(&trie, &h).unwrap(),
+        (b"hello world").to_vec()
+    );
 }
 
 #[test]
 fn overlaydb_negative() {
     let mut trie = OverlayDB::new_temp();
-    let h = trie.insert(b"hello world");
+    let h = TestHashDB::insert(&mut trie, b"hello world");
     trie.commit().unwrap();
-    trie.remove(&h);
-    trie.remove(&h); //bad - sends us into negative refs.
-    assert_eq!(trie.get(&h), None);
+    TestHashDB::remove(&mut trie, &h);
+    TestHashDB::remove(&mut trie, &h); //bad - sends us into negative refs.
+    assert_eq!(TestHashDB::get(&trie, &h), None);
     assert!(trie.commit().is_err());
 }
 
 #[test]
 fn overlaydb_complex() {
     let mut trie = OverlayDB::new_temp();
-    let hfoo = trie.insert(b"foo");
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
-    let hbar = trie.insert(b"bar");
-    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
+    let hfoo = TestHashDB::insert(&mut trie, b"foo");
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
+    let hbar = TestHashDB::insert(&mut trie, b"bar");
+    assert_eq!(TestHashDB::get(&trie, &hbar).unwrap(), (b"bar").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
-    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
-    trie.insert(b"foo"); // two refs
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(TestHashDB::get(&trie, &hbar).unwrap(), (b"bar").to_vec());
+    TestHashDB::insert(&mut trie, b"foo"); // two refs
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
-    assert_eq!(trie.get(&hbar).unwrap(), (b"bar").to_vec());
-    trie.remove(&hbar); // zero refs - delete
-    assert_eq!(trie.get(&hbar), None);
-    trie.remove(&hfoo); // one ref - keep
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(TestHashDB::get(&trie, &hbar).unwrap(), (b"bar").to_vec());
+    TestHashDB::remove(&mut trie, &hbar); // zero refs - delete
+    assert_eq!(TestHashDB::get(&trie, &hbar), None);
+    TestHashDB::remove(&mut trie, &hfoo); // one ref - keep
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
-    trie.remove(&hfoo); // zero ref - would delete, but...
-    assert_eq!(trie.get(&hfoo), None);
-    trie.insert(b"foo"); // one ref - keep after all.
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
+    TestHashDB::remove(&mut trie, &hfoo); // zero ref - would delete, but...
+    assert_eq!(TestHashDB::get(&trie, &hfoo), None);
+    TestHashDB::insert(&mut trie, b"foo"); // one ref - keep after all.
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
     trie.commit().unwrap();
-    assert_eq!(trie.get(&hfoo).unwrap(), (b"foo").to_vec());
-    trie.remove(&hfoo); // zero ref - delete
-    assert_eq!(trie.get(&hfoo), None);
+    assert_eq!(TestHashDB::get(&trie, &hfoo).unwrap(), (b"foo").to_vec());
+    TestHashDB::remove(&mut trie, &hfoo); // zero ref - delete
+    assert_eq!(TestHashDB::get(&trie, &hfoo), None);
     trie.commit().unwrap(); //
-    assert_eq!(trie.get(&hfoo), None);
+    assert_eq!(TestHashDB::get(&trie, &hfoo), None);
 }

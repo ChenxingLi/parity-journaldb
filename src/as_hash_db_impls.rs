@@ -18,12 +18,55 @@
 use crate::{AsKeyedHashDB, KeyedHashDB};
 use archivedb::ArchiveDB;
 use earlymergedb::EarlyMergeDB;
+use ethereum_types::H256;
 use hash_db::{AsHashDB, HashDB};
 use keccak_hasher::KeccakHasher;
-use kvdb::DBValue;
+use kvdb::DBValue as KVDBValue;
 use overlaydb::OverlayDB;
 use overlayrecentdb::OverlayRecentDB;
 use refcounteddb::RefCountedDB;
+use trie_db::DBValue;
+
+macro_rules! wrap_hash_db {
+    ($name: ty) => {
+        impl HashDB<KeccakHasher, DBValue> for $name {
+            fn get(&self, key: &H256) -> Option<DBValue> {
+                HashDB::<KeccakHasher, KVDBValue>::get(self, key).map(|x| DBValue::from_vec(x))
+            }
+
+            fn contains(&self, key: &H256) -> bool {
+                HashDB::<KeccakHasher, KVDBValue>::contains(self, key)
+            }
+
+            fn insert(&mut self, value: &[u8]) -> H256 {
+                HashDB::<KeccakHasher, KVDBValue>::insert(self, value)
+            }
+
+            fn emplace(&mut self, key: H256, value: DBValue) {
+                HashDB::<KeccakHasher, KVDBValue>::emplace(self, key, value.into_vec())
+            }
+
+            fn remove(&mut self, key: &H256) {
+                HashDB::<KeccakHasher, KVDBValue>::remove(self, key)
+            }
+        }
+
+        impl AsHashDB<KeccakHasher, KVDBValue> for $name {
+            fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, KVDBValue> {
+                self
+            }
+            fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, KVDBValue> {
+                self
+            }
+        }
+    };
+}
+
+wrap_hash_db!(ArchiveDB);
+wrap_hash_db!(EarlyMergeDB);
+wrap_hash_db!(OverlayRecentDB);
+wrap_hash_db!(RefCountedDB);
+wrap_hash_db!(OverlayDB);
 
 impl AsHashDB<KeccakHasher, DBValue> for ArchiveDB {
     fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
