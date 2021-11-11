@@ -51,11 +51,26 @@ macro_rules! wrap_hash_db {
             }
         }
 
+        impl AsHashDB<KeccakHasher, DBValue> for $name {
+            fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
+                self
+            }
+            fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
+                self
+            }
+        }
+
         impl AsHashDB<KeccakHasher, KVDBValue> for $name {
             fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, KVDBValue> {
                 self
             }
             fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, KVDBValue> {
+                self
+            }
+        }
+
+        impl AsKeyedHashDB for $name {
+            fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
                 self
             }
         }
@@ -67,78 +82,3 @@ wrap_hash_db!(EarlyMergeDB);
 wrap_hash_db!(OverlayRecentDB);
 wrap_hash_db!(RefCountedDB);
 wrap_hash_db!(OverlayDB);
-
-impl AsHashDB<KeccakHasher, DBValue> for ArchiveDB {
-    fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-    fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-}
-
-impl AsHashDB<KeccakHasher, DBValue> for EarlyMergeDB {
-    fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-    fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-}
-
-impl AsHashDB<KeccakHasher, DBValue> for OverlayRecentDB {
-    fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-    fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-}
-
-impl AsHashDB<KeccakHasher, DBValue> for RefCountedDB {
-    fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-    fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-}
-
-impl AsHashDB<KeccakHasher, DBValue> for OverlayDB {
-    fn as_hash_db(&self) -> &dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-    fn as_hash_db_mut(&mut self) -> &mut dyn HashDB<KeccakHasher, DBValue> {
-        self
-    }
-}
-
-impl AsKeyedHashDB for ArchiveDB {
-    fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
-        self
-    }
-}
-
-impl AsKeyedHashDB for EarlyMergeDB {
-    fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
-        self
-    }
-}
-
-impl AsKeyedHashDB for OverlayRecentDB {
-    fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
-        self
-    }
-}
-
-impl AsKeyedHashDB for RefCountedDB {
-    fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
-        self
-    }
-}
-
-impl AsKeyedHashDB for OverlayDB {
-    fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
-        self
-    }
-}

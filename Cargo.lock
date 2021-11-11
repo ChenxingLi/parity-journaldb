@@ -285,6 +285,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b03501f6e1a2a97f1618879aba3156f14ca2847faa530c4e28859638bd11483"
 
 [[package]]
+name = "hash-db"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+
+[[package]]
 name = "hashbrown"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -403,7 +409,7 @@ version = "0.1.1"
 source = "git+https://github.com/openethereum/openethereum.git?rev=2ae2949#2ae294990ad4865e79b3d72d6f0c2af0f6502bdb"
 dependencies = [
  "ethereum-types 0.9.2",
- "hash-db",
+ "hash-db 0.11.0",
  "plain_hasher",
  "tiny-keccak 1.5.0",
 ]
@@ -497,7 +503,7 @@ checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 name = "memory-db"
 version = "0.11.0"
 dependencies = [
- "hash-db",
+ "hash-db 0.11.0",
  "parity-util-mem 0.7.0",
 ]
 
@@ -514,7 +520,8 @@ dependencies = [
  "env_logger",
  "ethereum-types 0.9.2",
  "fastmap",
- "hash-db",
+ "hash-db 0.11.0",
+ "hash-db 0.15.2",
  "keccak-hash",
  "keccak-hasher",
  "kvdb",
@@ -1053,7 +1060,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c7319e28ca295f27359d944a682f7f65b419158bf1590c92cadc0000258d788"
 dependencies = [
  "elastic-array",
- "hash-db",
+ "hash-db 0.11.0",
  "log",
  "rand 0.6.5",
 ]

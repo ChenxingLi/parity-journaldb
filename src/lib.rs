@@ -22,14 +22,15 @@ extern crate log;
 extern crate ethereum_types;
 extern crate fastmap;
 extern crate hash_db;
+extern crate hash_db15;
 extern crate keccak_hasher;
 extern crate kvdb;
 extern crate memory_db;
 extern crate parity_bytes as bytes;
 extern crate parity_util_mem;
 extern crate parking_lot;
-extern crate trie_db;
 extern crate rlp;
+extern crate trie_db;
 
 #[cfg(test)]
 extern crate env_logger;
