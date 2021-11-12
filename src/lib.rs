@@ -24,6 +24,7 @@ extern crate fastmap;
 extern crate hash_db;
 extern crate hash_db15;
 extern crate keccak_hasher;
+extern crate keccak_hasher15;
 extern crate kvdb;
 extern crate memory_db;
 extern crate parity_bytes as bytes;

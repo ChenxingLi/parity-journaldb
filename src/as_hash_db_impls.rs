@@ -20,7 +20,9 @@ use archivedb::ArchiveDB;
 use earlymergedb::EarlyMergeDB;
 use ethereum_types::H256;
 use hash_db::{AsHashDB, HashDB};
+use hash_db15::{AsHashDB as AsHashDB15, HashDB as HashDB15, Prefix};
 use keccak_hasher::KeccakHasher;
+use keccak_hasher15::KeccakHasher as KeccakHasher15;
 use kvdb::DBValue as KVDBValue;
 use overlaydb::OverlayDB;
 use overlayrecentdb::OverlayRecentDB;
@@ -72,6 +74,41 @@ macro_rules! wrap_hash_db {
         impl AsKeyedHashDB for $name {
             fn as_keyed_hash_db(&self) -> &dyn KeyedHashDB {
                 self
+            }
+        }
+
+        impl AsHashDB15<KeccakHasher15, DBValue> for $name {
+            fn as_hash_db(&self) -> &dyn HashDB15<KeccakHasher15, DBValue> {
+                self
+            }
+
+            fn as_hash_db_mut(&mut self) -> &mut dyn HashDB15<KeccakHasher15, DBValue> {
+                self
+            }
+        }
+
+        impl HashDB15<KeccakHasher15, DBValue> for $name {
+            // The key function `HashKey` in `memory-db` (v0.28.0) omits `prefix`.
+            // The example code in `TrieDB` uses `HashKey` as key function.
+            // So here we also omit `prefix`.
+            fn get(&self, key: &[u8; 32], _prefix: Prefix) -> Option<DBValue> {
+                HashDB::<KeccakHasher, DBValue>::get(self, &key.into())
+            }
+
+            fn contains(&self, key: &[u8; 32], _prefix: Prefix) -> bool {
+                HashDB::<KeccakHasher, DBValue>::contains(self, &key.into())
+            }
+
+            fn insert(&mut self, _prefix: Prefix, value: &[u8]) -> [u8; 32] {
+                HashDB::<KeccakHasher, DBValue>::insert(self, value).into()
+            }
+
+            fn emplace(&mut self, key: [u8; 32], _prefix: Prefix, value: DBValue) {
+                HashDB::<KeccakHasher, DBValue>::emplace(self, key.into(), value)
+            }
+
+            fn remove(&mut self, key: &[u8; 32], _prefix: Prefix) {
+                HashDB::<KeccakHasher, DBValue>::remove(self, &key.into())
             }
         }
     };
