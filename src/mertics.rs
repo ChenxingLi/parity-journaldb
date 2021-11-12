@@ -1,7 +1,7 @@
 // The original journaldb relies on some metric tools in crate `ethcore-db`. But it doesn't rely on the other dependencies.
 
 /// Ethcore definition of a KeyValueDB with embeeded metrics
-pub trait KeyValueDB: kvdb::KeyValueDB + stats::PrometheusMetrics {}
+// pub trait KeyValueDB: kvdb::KeyValueDB + stats::PrometheusMetrics {}
 
 #[cfg(test)]
 pub use self::memory_db::InMemoryWithMetrics;
@@ -74,8 +74,6 @@ mod memory_db {
     impl stats::PrometheusMetrics for InMemoryWithMetrics {
         fn prometheus_metrics(&self, _: &mut stats::PrometheusRegistry) {}
     }
-
-    impl super::KeyValueDB for InMemoryWithMetrics {}
 
     impl InMemoryWithMetrics {
         /// Create new instance

@@ -23,7 +23,7 @@ use std::{
 };
 
 use super::error_negatively_reference_hash;
-use crate::mertics::KeyValueDB;
+use crate::KeyValueDB;
 use ethereum_types::H256;
 use hash_db::HashDB;
 use keccak_hasher::KeccakHasher;

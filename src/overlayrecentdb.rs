@@ -23,7 +23,7 @@ use std::{
 };
 
 use super::{error_negatively_reference_hash, JournalDB, DB_PREFIX_LEN, LATEST_ERA_KEY};
-use crate::mertics::KeyValueDB;
+use crate::KeyValueDB;
 use bytes::Bytes;
 use ethereum_types::H256;
 use fastmap::H256FastMap;

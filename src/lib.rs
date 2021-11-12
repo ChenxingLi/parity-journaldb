@@ -57,7 +57,7 @@ pub mod overlaydb;
 use mertics::InMemoryWithMetrics;
 #[cfg(test)]
 extern crate parity_util_mem05;
-pub use mertics::KeyValueDB;
+pub use kvdb::KeyValueDB;
 
 /// Export the `JournalDB` trait.
 pub use self::traits::JournalDB;
