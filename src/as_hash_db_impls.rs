@@ -92,11 +92,11 @@ macro_rules! wrap_hash_db {
             // The example code in `TrieDB` uses `HashKey` as key function.
             // So here we also omit `prefix`.
             fn get(&self, key: &[u8; 32], _prefix: Prefix) -> Option<DBValue> {
-                HashDB::<KeccakHasher, DBValue>::get(self, &key.into())
+                HashDB::<KeccakHasher, DBValue>::get(self, to_h256_ref(key))
             }
 
             fn contains(&self, key: &[u8; 32], _prefix: Prefix) -> bool {
-                HashDB::<KeccakHasher, DBValue>::contains(self, &key.into())
+                HashDB::<KeccakHasher, DBValue>::contains(self, to_h256_ref(key))
             }
 
             fn insert(&mut self, _prefix: Prefix, value: &[u8]) -> [u8; 32] {
@@ -108,7 +108,7 @@ macro_rules! wrap_hash_db {
             }
 
             fn remove(&mut self, key: &[u8; 32], _prefix: Prefix) {
-                HashDB::<KeccakHasher, DBValue>::remove(self, &key.into())
+                HashDB::<KeccakHasher, DBValue>::remove(self, to_h256_ref(key))
             }
         }
     };
@@ -119,3 +119,7 @@ wrap_hash_db!(EarlyMergeDB);
 wrap_hash_db!(OverlayRecentDB);
 wrap_hash_db!(RefCountedDB);
 wrap_hash_db!(OverlayDB);
+
+fn to_h256_ref(input: &[u8; 32]) -> &H256 {
+    unsafe { std::mem::transmute(input) }
+}
